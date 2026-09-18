@@ -88,6 +88,7 @@
       h3 { margin: 0; font-size: clamp(1.35rem, 2.6vw, 1.85rem); letter-spacing: -.025em; }
       .status { flex: none; padding: 5px 9px; border-radius: 999px; font-size: .69rem; font-weight: 900; letter-spacing: .07em; }
       .status.proposed { color: var(--cyan); border: 1px solid rgba(109, 227, 255, .45); background: rgba(109, 227, 255, .09); }
+      .status.canonical { color: var(--green); border: 1px solid rgba(116, 228, 174, .45); background: rgba(116, 228, 174, .09); }
       .status.open { color: var(--gold); border: 1px solid rgba(255, 202, 109, .45); background: rgba(255, 202, 109, .08); }
       .status.blocked { color: var(--danger); border: 1px solid rgba(255, 155, 155, .45); background: rgba(255, 155, 155, .08); }
       .result-copy { color: var(--muted); margin: 12px 0 20px; }
@@ -222,8 +223,9 @@
               <option value="ordinary">Обычная операция</option>
               <option value="asset">Обычный перевод актива</option>
               <option value="add-device">Добавить Device Signer</option>
+              <option value="add-social">Добавить Social Signer</option>
               <option value="remove-device">Удалить Device Signer</option>
-              <option value="signer-management">Управление signer-ами</option>
+              <option value="signer-management">Другие изменения подписантов</option>
               <option value="unlock">Досрочно разблокировать Guardian</option>
               <option value="disable-guardian">Отключить Guardian</option>
               <option value="critical">Критическое изменение policy / upgrade</option>
@@ -244,10 +246,10 @@
             <p id="result-copy" class="result-copy"></p>
             <div id="signature-path" class="signature-path" aria-live="polite"></div>
             <div id="choice-panel" class="choice-panel">
-              <span class="choice-title">Третий фактор для этого примера</span>
-              <div class="choice-options" role="group" aria-label="Выбор третьего фактора">
-                <button type="button" data-third="guardian">Guardian</button>
-                <button type="button" data-third="recovery">Recovery</button>
+              <span class="choice-title">Recovery или Guardian для этой операции</span>
+              <div class="choice-options" role="group" aria-label="Выбор Recovery или Guardian">
+                <button type="button" data-support="guardian">Guardian</button>
+                <button type="button" data-support="recovery">Recovery</button>
               </div>
             </div>
           </article>
@@ -291,14 +293,14 @@
 
       <footer class="footer">
         <p><strong>Основание:</strong> текущая canonical architecture DSF Wallet.</p>
-        <p>Статусы <strong>PROPOSED</strong> и <strong>OPEN</strong> означают: код и окончательная contract policy ещё не утверждены.</p>
+        <p><strong>CANONICAL</strong> — принятое архитектурное правило. <strong>PROPOSED / OPEN</strong> — ещё обсуждается. Контрактная реализация отсутствует.</p>
       </footer>
     </main>
 
     <script>
       const states = {
         assisted: { label: "ASSISTED STATE", name: "Assisted", note: "Recovery ещё не настроен. Guardian помогает onboarding и может участвовать только в разрешённых security operations." },
-        hybrid: { label: "HYBRID STATE", name: "Hybrid", note: "Есть и user-owned Recovery, и optional Guardian. Для разрешённых операций policy выбирает третий фактор." },
+        hybrid: { label: "HYBRID STATE", name: "Hybrid", note: "Есть свой Recovery, Guardian включён. Для добавления Device или Social можно выбрать Recovery либо Guardian." },
         self: { label: "SELF-SOVEREIGN STATE", name: "Self-sovereign", note: "Guardian выключен. В security path остаётся user-owned Recovery." }
       };
 
@@ -320,27 +322,35 @@
           rules: ["Это direction, а не готовая денежная policy.", "Перед реальными активами нужны Recovery и security review."]
         },
         "add-device": {
-          title: "Добавить Device Signer", status: "PROPOSED", kind: "proposed",
-          hint: "Security-sensitive candidate: Device + Social + (Recovery OR Guardian).",
-          copy: "Добавление нового device меняет security surface аккаунта. Поэтому кандидату требуется третий фактор — Recovery либо Guardian, если operation policy это разрешит.",
-          why: "Две Social подписи не могут заменить Device или третий Recovery/Assisted category requirement.",
-          factors: ["device", "social", "third"], third: true,
-          rules: ["Guardian должен подписывать exact `ADD_DEVICE`, включая commitment нового Device key.", "Final signature envelope и policy пока OPEN."]
+          title: "Добавить Device Signer", status: "CANONICAL", kind: "canonical",
+          hint: "Social + (Recovery или Guardian). Подпись существующего Device не нужна.",
+          copy: "Телефон потерян или украден? Новый Device добавляется с подтверждением действующего Social и вашего Recovery либо доступного Guardian.",
+          why: "Потерянное устройство не сможет подписать восстановление. Поэтому добавление Device подтверждают две другие категории. Новый ключ — тот, который добавляем, а не разрешение на собственное добавление.",
+          factors: ["social", "support"], support: true,
+          rules: ["Подписывается именно ADD_DEVICE с идентичностью нового ключа, кошельком, сетью, nonce и сроком действия.", "Если выбран Guardian, требуется включённый и доступный Guardian; PIN проверяет его сервис.", "Добавление не отключает украденный Device. Порядок отзыва старого ключа, задержки и отмена ещё OPEN."]
+        },
+        "add-social": {
+          title: "Добавить Social Signer", status: "CANONICAL", kind: "canonical",
+          hint: "Device + (Recovery или Guardian). Подпись существующего Social не нужна.",
+          copy: "Доступ к Social потерян или аккаунт захвачен? Новый Social добавляется с подтверждением действующего Device и вашего Recovery либо доступного Guardian.",
+          why: "Восстановление Social не должно зависеть от потерянного или захваченного Social. Разрешение дают две другие категории; вход в нового провайдера сам по себе не разрешает добавление его ключа.",
+          factors: ["device", "support"], support: true,
+          rules: ["Подписывается именно ADD_SOCIAL со стабильной идентичностью нового Social, кошельком, сетью, nonce и сроком действия.", "Если выбран Guardian, требуется включённый и доступный Guardian; PIN проверяет его сервис.", "Добавление не отключает захваченный Social. Порядок отзыва старого ключа, задержки и отмена ещё OPEN."]
         },
         "remove-device": {
           title: "Удалить Device Signer", status: "PROPOSED", kind: "proposed",
           hint: "Security-sensitive candidate: Device + Social + (Recovery OR Guardian).",
           copy: "Удаление Device Signer может ухудшить способность пользователя вернуть контроль. Это не обычная операция.",
           why: "Третий фактор снижает риск, что скомпрометированный Device + Social путь тихо ослабит защиту аккаунта.",
-          factors: ["device", "social", "third"], third: true,
-          rules: ["В Assisted state доступен только Guardian candidate path.", "Точные delays, cancellation и recovery consequences ещё не утверждены."]
+          factors: ["device", "social", "support"], support: true,
+          rules: ["Это отдельное предварительное правило удаления; оно не применяется к добавлению Device или Social.", "Для отзыва потерянного Device ещё нужно определить подписи и порядок действий. Показанный кандидат не решает этот сценарий."]
         },
         "signer-management": {
-          title: "Управление signer-ами", status: "PROPOSED", kind: "proposed",
+          title: "Другие изменения подписантов", status: "PROPOSED", kind: "proposed",
           hint: "Для выбранных signer-management операций нужен третий category factor.",
-          copy: "Signer management меняет, кто сможет подтверждать будущие действия. Поэтому это security-sensitive область.",
+          copy: "Это предварительный пример для остальных изменений. Добавление Device и Social имеет отдельные правила — выберите соответствующую операцию в списке.",
           why: "Policy должна смотреть на независимые категории и operation type, а не просто считать число ключей.",
-          factors: ["device", "social", "third"], third: true,
+          factors: ["device", "social", "support"], support: true,
           rules: ["Какие именно операции входят в эту группу — OPEN POLICY DECISION.", "Guardian разрешён только для явно выбранных типов операций."]
         },
         unlock: {
@@ -377,7 +387,7 @@
       };
 
       let selectedState = "assisted";
-      let selectedThird = "guardian";
+      let selectedSupport = "guardian";
 
       const operationSelect = document.getElementById("operation");
       const stateLabel = document.getElementById("state-label");
@@ -398,13 +408,13 @@
       function render() {
         const operation = operations[operationSelect.value];
         const state = states[selectedState];
-        const requiresThird = operation.third;
-        let effectiveThird = selectedThird;
+        const requiresSupport = operation.support;
+        let effectiveSupport = selectedSupport;
 
-        if (requiresThird && selectedState === "assisted") effectiveThird = "guardian";
-        if (selectedState === "self" && effectiveThird === "guardian") effectiveThird = "recovery";
+        if (requiresSupport && selectedState === "assisted") effectiveSupport = "guardian";
+        if (selectedState === "self" && effectiveSupport === "guardian") effectiveSupport = "recovery";
 
-        const factors = operation.factors.map((factor) => factor === "third" ? effectiveThird : factor);
+        const factors = operation.factors.map((factor) => factor === "support" ? effectiveSupport : factor);
         const stateSpecificCopy = selectedState === "assisted" && operation.factors.includes("recovery")
           ? " В Assisted state эта операция пока не имеет определённого Recovery path: сначала нужно настроить user-owned Recovery."
           : "";
@@ -419,10 +429,10 @@
         signaturePath.innerHTML = factors.map(factorMarkup).join("");
         ruleList.innerHTML = operation.rules.map((rule, index) => `<div class="rule"><span class="rule-number">0${index + 1}</span><span>${rule}</span></div>`).join("");
 
-        choicePanel.classList.toggle("visible", requiresThird && selectedState === "hybrid");
-        document.querySelectorAll("[data-third]").forEach((button) => {
-          button.classList.toggle("active", button.dataset.third === effectiveThird);
-          button.setAttribute("aria-pressed", String(button.dataset.third === effectiveThird));
+        choicePanel.classList.toggle("visible", requiresSupport && selectedState === "hybrid");
+        document.querySelectorAll("[data-support]").forEach((button) => {
+          button.classList.toggle("active", button.dataset.support === effectiveSupport);
+          button.setAttribute("aria-pressed", String(button.dataset.support === effectiveSupport));
         });
       }
 
@@ -434,9 +444,9 @@
         });
       });
 
-      document.querySelectorAll("[data-third]").forEach((button) => {
+      document.querySelectorAll("[data-support]").forEach((button) => {
         button.addEventListener("click", () => {
-          selectedThird = button.dataset.third;
+          selectedSupport = button.dataset.support;
           render();
         });
       });
